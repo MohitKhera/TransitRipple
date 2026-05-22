@@ -1,0 +1,13 @@
+gtfs-kit
+partridge
+pandas
+polars
+networkx
+requests
+tqdm
+pyarrow
+fastapi
+uvicorn
+mlflow
+torch
+torch-geometric
