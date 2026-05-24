@@ -44,7 +44,7 @@ if __name__ == "__main__":
             response = fetch_arrivals(station_id)
             if response is None:
                 continue
-            arrivals = response["ctatt"]["eta"]
+            arrivals = response["ctatt"].get("eta", [])
             all_records.extend(arrivals)
         save_snapshot(all_records)
         print(f"Saved {len(all_records)} records at {datetime.now()}")
