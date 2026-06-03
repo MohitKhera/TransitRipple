@@ -53,7 +53,7 @@ Evaluated on a held-out temporal test set (611 samples, 20% of data):
 | Persistence Baseline | 0.9423 | 0.7497 | — |
 | Majority Class Baseline | 0.8847 | 0.0000 | — |
 
-> The majority class baseline (always predict "not delayed") achieves 88% accuracy with F1 = 0, confirming that accuracy alone is misleading on this imbalanced dataset (10.6% delay rate). TransitGNN achieves **AUC-ROC of 0.91**, meaning it correctly ranks delayed stations above non-delayed ones 91% of the time.
+> TransitGNN achieves **AUC-ROC of 0.91**, meaning it correctly ranks delayed stations above non-delayed ones 91% of the time.
 
 ---
 
