@@ -51,41 +51,60 @@ split = int(0.8 * len(X_tensor))
 X_train, X_test = X_tensor[:split], X_tensor[split:]
 y_train, y_test = y_tensor[:split], y_tensor[split:]
 
-print(f"Train samples: {len(X_train)}")
-print(f"Test samples: {len(X_test)}")
-
 model = TransitGNN(in_channels=1, hidden_channels=64, out_channels=1)
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-criterion = nn.BCEWithLogitsLoss()
+model.load_state_dict(torch.load("model/best_model.pth"))
+model.eval()
 
-EPOCHS = 50
-LR = 0.001
-HIDDEN = 64
+all_preds = []
+all_targets = []
 
-with mlflow.start_run():
-    mlflow.log_param("lr", LR)
-    mlflow.log_param("epochs", EPOCHS)
-    mlflow.log_param("hidden_channels", HIDDEN)
-    best_loss = float('inf')
-    for epoch in range(EPOCHS):
-        model.train()
-        total_loss = 0
-        for i in range(len(X_train)):
-            x = X_train[i].unsqueeze(-1)
-            target = y_train[i].unsqueeze(-1)
-            optimizer.zero_grad()
-            output = model(x, edge_index)
-            loss = criterion(output, target)
-            loss.backward()
-            optimizer.step()
-            total_loss += loss.item()
-        avg_loss = total_loss / len(X_train)
-        if best_loss > avg_loss:
-            best_loss = avg_loss
-            torch.save(model.state_dict(), "model/best_model.pth")
-            print(f"  → New best model saved (loss: {best_loss:.4f})")
-        mlflow.log_metric("train_loss", avg_loss, step=epoch)
-        print(f"Epoch {epoch+1}/{EPOCHS} - Loss: {avg_loss:.4f}")
-    
-    mlflow.pytorch.log_model(model, "model")
-    print("Model logged to MLflow")
+model.eval()
+with torch.no_grad():
+    for i in range(len(X_test)):
+        # get one sample, reshape it
+        # run through model
+        # collect output and target
+        x = X_test[i].unsqueeze(-1)
+        target = y_test[i].unsqueeze(-1)
+        all_targets.append(target)
+        output = model(x, edge_index)
+        all_preds.append(output)
+
+all_preds = torch.cat(all_preds)
+all_targets = torch.cat(all_targets)
+probs = torch.sigmoid(all_preds)
+preds = (probs > 0.5).float()
+
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
+
+preds_np = preds.numpy().flatten()
+targets_np = all_targets.numpy().flatten()
+probs_np = probs.numpy().flatten()
+
+accuracy = accuracy_score(targets_np, preds_np)
+f1 = f1_score(targets_np, preds_np)
+auc = roc_auc_score(targets_np, probs_np)
+
+print(f"Accuracy: {accuracy:.4f}")
+print(f"F1 Score: {f1:.4f}")
+print(f"AUC-ROC:  {auc:.4f}")
+
+persistence_preds = X_test[:, 3, :]
+
+persistence_preds_np = persistence_preds.numpy().flatten()
+
+p_accuracy = accuracy_score(targets_np, persistence_preds_np)
+p_f1 = f1_score(targets_np, persistence_preds_np)
+
+print(f"\n--- Persistence Baseline ---")
+print(f"Accuracy: {p_accuracy:.4f}")
+print(f"F1 Score: {p_f1:.4f}")
+
+maj_class_baseline = [0] * len(targets_np)
+
+m_accuracy = accuracy_score(targets_np, maj_class_baseline)
+m_f1 = f1_score(targets_np, maj_class_baseline)
+
+print(f"\n--- Majority Class Baseline ---")
+print(f"Accuracy: {m_accuracy:.4f}")
+print(f"F1 Score: {m_f1:.4f}")

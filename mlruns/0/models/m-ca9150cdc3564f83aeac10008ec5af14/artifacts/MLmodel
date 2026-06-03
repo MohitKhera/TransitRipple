@@ -1,0 +1,23 @@
+artifact_path: file:C:/Users/mkher/Desktop/TransitRipple/mlruns/0/models/m-ca9150cdc3564f83aeac10008ec5af14/artifacts
+flavors:
+  python_function:
+    config:
+      device: null
+    data: data
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.pytorch
+    pickle_module_name: mlflow.pytorch.pickle_module
+    python_version: 3.13.1
+  pytorch:
+    code: null
+    model_data: data
+    pytorch_version: 2.12.0+cpu
+mlflow_version: 3.12.0
+model_id: m-ca9150cdc3564f83aeac10008ec5af14
+model_size_bytes: 45569
+model_uuid: m-ca9150cdc3564f83aeac10008ec5af14
+prompts: null
+run_id: 84726530ee57497e9ac6898e3d1dbdcf
+utc_time_created: '2026-06-01 21:52:59.707141'

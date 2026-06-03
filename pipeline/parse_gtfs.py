@@ -9,7 +9,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 print("Loading GTFS feed...")
 feed = gk.read_feed(GTFS_ZIP, dist_units="km")
 
-stops = feed.stops[["stop_id", "stop_name", "stop_lat", "stop_lon"]].copy()
+stops = feed.stops[["stop_id", "stop_name", "stop_lat", "stop_lon", "parent_station"]].copy()
 stops.to_csv(OUTPUT_DIR / "stops.csv", index=False)
 print(f"  Stops: {len(stops)} rows")
 
