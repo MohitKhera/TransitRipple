@@ -84,7 +84,7 @@ delaydar/
 │   ├── process_snapshots.py      # Per-station delay features
 │   └── build_dataset.py          # Temporal windows (X, y tensors)
 ├── model/
-│   ├── gnn.py                    # TransitGNN architecture
+│   ├── gnn.py                    # DelaydarGNN architecture
 │   ├── train.py                  # Training loop with MLflow tracking
 │   ├── evaluate.py               # Test set evaluation + baselines
 │   └── best_model.pth            # Saved model weights
@@ -157,7 +157,6 @@ echo CTA_API_KEY=your_key_here > .env
 - **Larger dataset** — 5 days of collection captures limited weekly patterns; 3–4 weeks would expose Monday morning vs. weekend dynamics
 - **Batch training** — current sample-by-sample training is slow; PyTorch Geometric DataLoader would enable proper mini-batch training
 - **Live inference** — connect `/predict` to the real-time CTA API instead of historical snapshots
-- **Frontend visualization** — interactive map showing delay probability per station in real time
 
 ---
 
