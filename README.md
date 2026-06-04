@@ -32,7 +32,7 @@ FastAPI inference endpoint → POST /predict
 
 ## Model Architecture
 
-**TransitGNN** combines spatial and temporal components:
+**DelaydarGNN** combines spatial and temporal components:
 
 - **GCNConv (×2)** — graph convolution layers that propagate delay signals across neighboring stations
 - **GRU** — recurrent layer that captures how delay patterns evolve over time
