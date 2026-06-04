@@ -9,6 +9,14 @@ from pydantic import BaseModel
 from typing import List
 
 app = FastAPI()
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 sys.path.append(str(Path(__file__).parent.parent / "model"))
 from gnn import TransitGNN
 
