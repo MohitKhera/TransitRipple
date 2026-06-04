@@ -49,7 +49,7 @@ Evaluated on a held-out temporal test set (611 samples, 20% of data):
 
 | Model | Accuracy | F1 Score | AUC-ROC |
 |-------|----------|----------|---------|
-| **TransitGNN** | 0.9386 | 0.7250 | **0.9086** |
+| **DelaydarGNN** | 0.9386 | 0.7250 | **0.9086** |
 | Persistence Baseline | 0.9423 | 0.7497 | — |
 | Majority Class Baseline | 0.8847 | 0.0000 | — |
 
@@ -148,6 +148,14 @@ pip install -r requirements.txt
 # Add CTA API key
 echo CTA_API_KEY=your_key_here > .env
 ```
+
+---
+
+## Frontend
+A live map visualization is available at `frontend/index.html`. 
+Open it in a browser with the API running to see per-station delay 
+probabilities across all 143 CTA L stations, color-coded by risk level 
+and auto-refreshing every 2 minutes.
 
 ---
 
