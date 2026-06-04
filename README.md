@@ -1,4 +1,4 @@
-# TransitRipple 🚇
+# Delaydar 🚇
 
 **Predicting cascading delay propagation across Chicago's CTA L train network using Temporal Graph Neural Networks.**
 
@@ -6,7 +6,7 @@
 
 ## Overview
 
-TransitRipple models the CTA L train network as a dynamic graph and predicts how a delay at any station propagates across the network over a 30–60 minute horizon. Rather than treating delays as isolated events, it treats them as contagions spreading through a graph — capturing the spatial and temporal structure of real transit disruptions.
+Delaydar models the CTA L train network as a dynamic graph and predicts how a delay at any station propagates across the network over a 30–60 minute horizon. Rather than treating delays as isolated events, it treats them as contagions spreading through a graph — capturing the spatial and temporal structure of real transit disruptions.
 
 Built end-to-end: from a custom data collection pipeline deployed on AWS EC2, through graph construction and feature engineering, to a trained GNN with a live FastAPI inference endpoint.
 
@@ -73,7 +73,7 @@ Evaluated on a held-out temporal test set (611 samples, 20% of data):
 ## Project Structure
 
 ```
-transitripple/
+delaydar/
 ├── data/
 │   ├── raw/gtfs_static/          # GTFS static feed
 │   └── processed/                # Processed features, graph, dataset
@@ -135,8 +135,8 @@ Interactive docs available at `http://127.0.0.1:8000/docs`
 
 ```bash
 # Clone the repo
-git clone https://github.com/MohitKhera/TransitRipple
-cd TransitRipple
+git clone https://github.com/MohitKhera/Delaydar
+cd Delaydar
 
 # Create virtual environment
 python -m venv venv
