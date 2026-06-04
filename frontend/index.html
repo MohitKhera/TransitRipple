@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TransitRipple — CTA Delay Propagation</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0f1e; color: #e2e8f0; height: 100vh; display: flex; flex-direction: column; }
+  #root { display: flex; flex-direction: column; height: 100vh; }
+
+  .header {
+    background: #0d1526;
+    border-bottom: 1px solid #1e2d4a;
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    z-index: 1000;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; color: #f8fafc; }
+  .logo span { color: #38bdf8; }
+  .tagline { font-size: 12px; color: #64748b; letter-spacing: 0.3px; }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+
+  .status-pill {
+    display: flex; align-items: center; gap: 6px;
+    background: #0f2027; border: 1px solid #1e3a4a;
+    border-radius: 20px; padding: 4px 12px;
+    font-size: 12px; color: #94a3b8;
+  }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; animation: pulse 2s infinite; }
+  .status-dot.loading { background: #f59e0b; animation: none; }
+  .status-dot.error { background: #ef4444; animation: none; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+
+  .refresh-btn {
+    background: #1e3a5f; border: 1px solid #2563eb;
+    color: #93c5fd; border-radius: 6px; padding: 5px 12px;
+    font-size: 12px; cursor: pointer; transition: background 0.15s;
+  }
+  .refresh-btn:hover { background: #2563eb; color: #fff; }
+
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  .sidebar {
+    width: 300px;
+    background: #0d1526;
+    border-right: 1px solid #1e2d4a;
+    display: flex; flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .sidebar-header {
+    padding: 16px;
+    border-bottom: 1px solid #1e2d4a;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.8px;
+    color: #475569; text-transform: uppercase;
+  }
+  .sidebar-content { flex: 1; overflow-y: auto; padding: 8px; }
+  .sidebar-content::-webkit-scrollbar { width: 4px; }
+  .sidebar-content::-webkit-scrollbar-track { background: transparent; }
+  .sidebar-content::-webkit-scrollbar-thumb { background: #1e3a4a; border-radius: 4px; }
+
+  .station-card {
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 4px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .station-card:hover { background: #111827; border-color: #1e3a4a; }
+  .station-card.selected { background: #0f2540; border-color: #2563eb; }
+  .station-name { font-size: 13px; color: #cbd5e1; font-weight: 500; }
+  .station-id { font-size: 11px; color: #475569; margin-top: 2px; }
+
+  .prob-badge {
+    font-size: 12px; font-weight: 700;
+    padding: 3px 8px; border-radius: 12px;
+    white-space: nowrap;
+  }
+  .prob-low { background: #052e16; color: #4ade80; border: 1px solid #166534; }
+  .prob-mid { background: #2d1a00; color: #fbbf24; border: 1px solid #92400e; }
+  .prob-high { background: #2d0a0a; color: #f87171; border: 1px solid #991b1b; }
+
+  .map-container { flex: 1; position: relative; }
+  #map { width: 100%; height: 100%; }
+
+  .map-overlay {
+    position: absolute; top: 16px; right: 16px; z-index: 999;
+    background: #0d1526dd; border: 1px solid #1e2d4a;
+    border-radius: 10px; padding: 12px 16px; min-width: 140px;
+    backdrop-filter: blur(8px);
+  }
+  .legend-title { font-size: 11px; color: #64748b; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 12px; color: #94a3b8; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  .last-updated {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 999; background: #0d1526cc; border: 1px solid #1e2d4a;
+    border-radius: 20px; padding: 4px 14px; font-size: 11px; color: #475569;
+    backdrop-filter: blur(8px);
+  }
+
+  .stats-bar {
+    background: #0d1526; border-top: 1px solid #1e2d4a;
+    padding: 8px 24px; display: flex; gap: 32px;
+    flex-shrink: 0; align-items: center;
+  }
+  .stat { display: flex; align-items: center; gap: 8px; }
+  .stat-label { font-size: 11px; color: #475569; }
+  .stat-value { font-size: 14px; font-weight: 600; color: #e2e8f0; }
+  .stat-value.danger { color: #f87171; }
+  .stat-value.warning { color: #fbbf24; }
+  .stat-value.success { color: #4ade80; }
+
+  .empty-state { padding: 24px 16px; text-align: center; color: #475569; font-size: 13px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+const API_URL = "http://127.0.0.1:8000";
+const REFRESH_INTERVAL = 120000;
+
+const STATIONS = [
+  {id:40010,name:"Austin-Blue",lat:41.870851,lon:-87.776812},
+  {id:40020,name:"Harlem-Green",lat:41.886848,lon:-87.803176},
+  {id:40030,name:"Pulaski-Green",lat:41.885412,lon:-87.725404},
+  {id:40040,name:"Quincy",lat:41.878723,lon:-87.63374},
+  {id:40050,name:"Cicero-Green",lat:41.886519,lon:-87.744698},
+  {id:40060,name:"Davis",lat:42.04771,lon:-87.683543},
+  {id:40070,name:"Belmont-Blue",lat:41.938132,lon:-87.712359},
+  {id:40080,name:"Jackson-Blue",lat:41.878183,lon:-87.629296},
+  {id:40090,name:"Sheridan",lat:41.953775,lon:-87.654929},
+  {id:40100,name:"Damen-Brown",lat:41.966286,lon:-87.678639},
+  {id:40110,name:"Morse",lat:42.008362,lon:-87.665909},
+  {id:40120,name:"35th/Archer",lat:41.829353,lon:-87.680622},
+  {id:40130,name:"51st",lat:41.80209,lon:-87.618487},
+  {id:40140,name:"Dempster-Skokie",lat:42.038951,lon:-87.751919},
+  {id:40150,name:"Pulaski-Cermak",lat:41.853732,lon:-87.724311},
+  {id:40160,name:"LaSalle/Van Buren",lat:41.8768,lon:-87.631739},
+  {id:40170,name:"Ashland-Lake",lat:41.885269,lon:-87.666969},
+  {id:40180,name:"Oak Park-Blue",lat:41.872108,lon:-87.791602},
+  {id:40190,name:"Sox-35th",lat:41.831191,lon:-87.630636},
+  {id:40200,name:"Damen-Cermak",lat:41.854517,lon:-87.675975},
+  {id:40210,name:"Western-Forest Park",lat:41.875478,lon:-87.688436},
+  {id:40220,name:"Cumberland",lat:41.984246,lon:-87.838028},
+  {id:40230,name:"79th",lat:41.750419,lon:-87.625112},
+  {id:40240,name:"Kedzie-Homan",lat:41.874341,lon:-87.70604},
+  {id:40250,name:"Main",lat:42.033456,lon:-87.679538},
+  {id:40260,name:"Central-Green",lat:41.887389,lon:-87.76565},
+  {id:40270,name:"Ashland/63rd",lat:41.77886,lon:-87.663766},
+  {id:40280,name:"Indiana",lat:41.821732,lon:-87.621371},
+  {id:40290,name:"Western-Orange",lat:41.804546,lon:-87.684019},
+  {id:40300,name:"Division",lat:41.903355,lon:-87.666496},
+  {id:40310,name:"Grand-Red",lat:41.891665,lon:-87.628021},
+  {id:40320,name:"Berwyn",lat:41.977984,lon:-87.658668},
+  {id:40330,name:"UIC-Halsted",lat:41.875474,lon:-87.649707},
+  {id:40340,name:"Southport",lat:41.943744,lon:-87.663619},
+  {id:40350,name:"Washington-Blue",lat:41.883164,lon:-87.62944},
+  {id:40360,name:"Clark/Lake",lat:41.885737,lon:-87.630886},
+  {id:40370,name:"Forest Park",lat:41.874257,lon:-87.817318},
+  {id:40380,name:"Noyes",lat:42.058282,lon:-87.683337},
+  {id:40390,name:"Roosevelt",lat:41.867405,lon:-87.62659},
+  {id:40400,name:"Cicero-Cermak",lat:41.85182,lon:-87.745336},
+  {id:40410,name:"Clinton-Blue",lat:41.875539,lon:-87.640984},
+  {id:40420,name:"California-Cermak",lat:41.854109,lon:-87.694774},
+  {id:40430,name:"95th/Dan Ryan",lat:41.722377,lon:-87.624342},
+  {id:40440,name:"Merchandise Mart",lat:41.888969,lon:-87.633924},
+  {id:40450,name:"Racine",lat:41.87592,lon:-87.659458},
+  {id:40460,name:"Grand-Blue",lat:41.891189,lon:-87.647578},
+  {id:40470,name:"Garfield-Green",lat:41.795172,lon:-87.618327},
+  {id:40480,name:"Foster",lat:42.05416,lon:-87.68356},
+  {id:40490,name:"Diversey",lat:41.932732,lon:-87.653131},
+  {id:40500,name:"Irving Park-Blue",lat:41.952925,lon:-87.729229},
+  {id:40510,name:"Jackson-Red",lat:41.878153,lon:-87.627596},
+  {id:40520,name:"California-OHare",lat:41.921939,lon:-87.69689},
+  {id:40530,name:"54th/Cermak",lat:41.85177,lon:-87.75669},
+  {id:40540,name:"Damen-OHare",lat:41.909744,lon:-87.677437},
+  {id:40550,name:"Kostner",lat:41.853751,lon:-87.733258},
+  {id:40560,name:"Ridgeland",lat:41.887159,lon:-87.783661},
+  {id:40570,name:"Clark/Division",lat:41.90392,lon:-87.631412},
+  {id:40580,name:"North/Clybourn",lat:41.910655,lon:-87.649177},
+  {id:40590,name:"Armitage",lat:41.918217,lon:-87.652644},
+  {id:40600,name:"Western-OHare",lat:41.916157,lon:-87.687364},
+  {id:40610,name:"Adams/Wabash",lat:41.879507,lon:-87.626037},
+  {id:40620,name:"Dempster",lat:42.041655,lon:-87.681602},
+  {id:40630,name:"Laramie",lat:41.887163,lon:-87.754986},
+  {id:40640,name:"Chicago-Brown",lat:41.89681,lon:-87.635924},
+  {id:40650,name:"East 63rd",lat:41.780309,lon:-87.605857},
+  {id:40660,name:"Washington/Wells",lat:41.882695,lon:-87.63378},
+  {id:40670,name:"Western-Cermak",lat:41.854225,lon:-87.685129},
+  {id:40680,name:"Harlem-OHare",lat:41.98227,lon:-87.8089},
+  {id:40690,name:"Granville",lat:41.993664,lon:-87.659202},
+  {id:40700,name:"Lawrence",lat:41.969139,lon:-87.658493},
+  {id:40710,name:"Central Park",lat:41.853839,lon:-87.714842},
+  {id:40720,name:"Monroe-Blue",lat:41.880703,lon:-87.629378},
+  {id:40730,name:"Sedgwick",lat:41.910409,lon:-87.639302},
+  {id:40740,name:"Illinois Medical District",lat:41.875706,lon:-87.673932},
+  {id:40750,name:"Rosemont",lat:41.983507,lon:-87.859388},
+  {id:40760,name:"18th",lat:41.857908,lon:-87.669147},
+  {id:40770,name:"South Boulevard",lat:42.027612,lon:-87.678329},
+  {id:40780,name:"Harold Washington Library",lat:41.876862,lon:-87.628196},
+  {id:40790,name:"Francisco",lat:41.966046,lon:-87.701644},
+  {id:40800,name:"Thorndale",lat:41.990259,lon:-87.659076},
+  {id:40810,name:"OHare",lat:41.97767,lon:-87.90422},
+  {id:40820,name:"Howard",lat:42.019063,lon:-87.672892},
+  {id:40830,name:"63rd",lat:41.780536,lon:-87.630952},
+  {id:40840,name:"Pulaski-Forest Park",lat:41.873797,lon:-87.725663},
+  {id:40850,name:"Midway",lat:41.78661,lon:-87.737875},
+  {id:40860,name:"Halsted-Green",lat:41.778943,lon:-87.644244},
+  {id:40870,name:"Pulaski-Orange",lat:41.799756,lon:-87.724493},
+  {id:40880,name:"Cicero-Forest Park",lat:41.871574,lon:-87.745154},
+  {id:40890,name:"Harlem-Forest Park",lat:41.87349,lon:-87.806961},
+  {id:40900,name:"69th",lat:41.768367,lon:-87.625724},
+  {id:40910,name:"Cermak-Chinatown",lat:41.853206,lon:-87.630968},
+  {id:40920,name:"Rockwell",lat:41.966115,lon:-87.6941},
+  {id:40930,name:"Logan Square",lat:41.929728,lon:-87.708541},
+  {id:40940,name:"Polk",lat:41.871551,lon:-87.66953},
+  {id:40950,name:"Kedzie-Cermak",lat:41.853964,lon:-87.705408},
+  {id:40960,name:"Linden",lat:42.073153,lon:-87.69073},
+  {id:40970,name:"Ashland-Orange",lat:41.839234,lon:-87.665317},
+  {id:40980,name:"Kedzie-Green",lat:41.884321,lon:-87.706155},
+  {id:40990,name:"47th-Green",lat:41.809209,lon:-87.618826},
+  {id:41000,name:"Monroe-Red",lat:41.880745,lon:-87.627696},
+  {id:41010,name:"35-Bronzeville-IIT",lat:41.831677,lon:-87.625826},
+  {id:41020,name:"Halsted-Orange",lat:41.84678,lon:-87.648088},
+  {id:41030,name:"King Drive",lat:41.78013,lon:-87.615546},
+  {id:41040,name:"Kedzie-Orange",lat:41.804236,lon:-87.704406},
+  {id:41050,name:"Clinton-Green",lat:41.885678,lon:-87.641782},
+  {id:41060,name:"Garfield-Red",lat:41.79542,lon:-87.631157},
+  {id:41070,name:"Kedzie-Brown",lat:41.965996,lon:-87.708821},
+  {id:41080,name:"Jarvis",lat:42.015876,lon:-87.669092},
+  {id:41090,name:"Argyle",lat:41.973453,lon:-87.65853},
+  {id:41100,name:"Wellington",lat:41.936033,lon:-87.653266},
+  {id:41110,name:"Fullerton",lat:41.925051,lon:-87.652866},
+  {id:41120,name:"47th-Red",lat:41.810318,lon:-87.63094},
+  {id:41130,name:"Addison-Blue",lat:41.94738,lon:-87.71906},
+  {id:41140,name:"Central-Purple",lat:42.063987,lon:-87.685617},
+  {id:41150,name:"Austin-Green",lat:41.887293,lon:-87.774135},
+  {id:41160,name:"43rd",lat:41.816462,lon:-87.619021},
+  {id:41170,name:"Jefferson Park",lat:41.970634,lon:-87.760892},
+  {id:41180,name:"Kimball",lat:41.967901,lon:-87.713065},
+  {id:41190,name:"Loyola",lat:42.001073,lon:-87.661061},
+  {id:41200,name:"Paulina",lat:41.943623,lon:-87.670907},
+  {id:41210,name:"Belmont-Red/Brown/Purple",lat:41.939751,lon:-87.65338},
+  {id:41220,name:"Montrose-Blue",lat:41.961539,lon:-87.743574},
+  {id:41230,name:"LaSalle",lat:41.875568,lon:-87.631722},
+  {id:41240,name:"Oak Park-Green",lat:41.886988,lon:-87.793783},
+  {id:41250,name:"California-Green",lat:41.88422,lon:-87.696234},
+  {id:41260,name:"Bryn Mawr",lat:41.983504,lon:-87.65884},
+  {id:41270,name:"Roosevelt-Subway",lat:41.867368,lon:-87.627402},
+  {id:41280,name:"Chicago-Blue",lat:41.896075,lon:-87.655214},
+  {id:41290,name:"Addison-Red",lat:41.947428,lon:-87.653626},
+  {id:41300,name:"87th",lat:41.735372,lon:-87.624717},
+  {id:41310,name:"Addison-Brown",lat:41.947028,lon:-87.674642},
+  {id:41320,name:"Chicago-Red",lat:41.896671,lon:-87.628176},
+  {id:41330,name:"Irving Park-Brown",lat:41.954521,lon:-87.674868},
+  {id:41340,name:"Western-Brown",lat:41.966163,lon:-87.688502},
+  {id:41350,name:"Harrison",lat:41.874039,lon:-87.627479},
+  {id:41360,name:"Montrose-Brown",lat:41.961756,lon:-87.675047},
+  {id:41370,name:"Lake",lat:41.884809,lon:-87.627813},
+  {id:41380,name:"Conservatory",lat:41.884904,lon:-87.716523},
+  {id:41390,name:"Morgan",lat:41.88558,lon:-87.65213},
+  {id:41400,name:"Oakton-Skokie",lat:42.02624,lon:-87.74722},
+  {id:41410,name:"Clark/Lake-Subway",lat:41.885737,lon:-87.630886},
+  {id:41420,name:"Cermak-McCormick Place",lat:41.853115,lon:-87.626402},
+  {id:41430,name:"Washington/Wabash",lat:41.88322,lon:-87.626189},
+  {id:41440,name:"Wilson",lat:41.964273,lon:-87.657588},
+  {id:41450,name:"Damen-Green",lat:41.88497,lon:-87.67689},
+];
+
+function probColor(p) {
+  if (p === null || p === undefined) return '#334155';
+  if (p < 0.3) return '#22c55e';
+  if (p < 0.6) return '#f59e0b';
+  return '#ef4444';
+}
+
+function probClass(p) {
+  if (p === null || p === undefined) return '';
+  if (p < 0.3) return 'prob-low';
+  if (p < 0.6) return 'prob-mid';
+  return 'prob-high';
+}
+
+function App() {
+  const [predictions, setPredictions] = useState({});
+  const [status, setStatus] = useState('idle');
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [selectedStation, setSelectedStation] = useState(null);
+  const [error, setError] = useState(null);
+  const mapRef = useRef(null);
+  const markersRef = useRef({});
+  const mapInstanceRef = useRef(null);
+
+  const fetchPredictions = useCallback(async () => {
+    setStatus('loading');
+    setError(null);
+    try {
+      const stationIds = STATIONS.map(s => s.id);
+      const res = await fetch(`${API_URL}/predict`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stations: stationIds })
+      });
+      if (!res.ok) throw new Error(`API error ${res.status}`);
+      const data = await res.json();
+      const predMap = {};
+      data.predictions.forEach(p => { predMap[p.station_id] = p.delay_probability; });
+      setPredictions(predMap);
+      setLastUpdated(new Date());
+      setStatus('ok');
+    } catch (e) {
+      setError(e.message);
+      setStatus('error');
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPredictions();
+    const interval = setInterval(fetchPredictions, REFRESH_INTERVAL);
+    return () => clearInterval(interval);
+  }, [fetchPredictions]);
+
+  useEffect(() => {
+    if (!mapRef.current || mapInstanceRef.current) return;
+    const map = L.map(mapRef.current, {
+      center: [41.88, -87.69],
+      zoom: 11,
+      zoomControl: true,
+    });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© OpenStreetMap © CartoDB',
+      maxZoom: 19,
+    }).addTo(map);
+    mapInstanceRef.current = map;
+
+    STATIONS.forEach(station => {
+      const marker = L.circleMarker([station.lat, station.lon], {
+        radius: 7,
+        fillColor: '#334155',
+        color: '#1e293b',
+        weight: 1.5,
+        opacity: 1,
+        fillOpacity: 0.9,
+      }).addTo(map);
+      marker.bindTooltip(station.name, { permanent: false, direction: 'top', className: 'station-tooltip' });
+      marker.on('click', () => setSelectedStation(station.id));
+      markersRef.current[station.id] = marker;
+    });
+  }, []);
+
+  useEffect(() => {
+    Object.entries(markersRef.current).forEach(([id, marker]) => {
+      const prob = predictions[parseInt(id)];
+      const color = probColor(prob);
+      const isSelected = parseInt(id) === selectedStation;
+      marker.setStyle({
+        fillColor: color,
+        color: isSelected ? '#fff' : '#1e293b',
+        weight: isSelected ? 3 : 1.5,
+        radius: isSelected ? 10 : 7,
+        fillOpacity: 0.9,
+      });
+    });
+  }, [predictions, selectedStation]);
+
+  const sortedStations = [...STATIONS].sort((a, b) => {
+    const pa = predictions[a.id] ?? -1;
+    const pb = predictions[b.id] ?? -1;
+    return pb - pa;
+  });
+
+  const highRiskCount = Object.values(predictions).filter(p => p >= 0.6).length;
+  const midRiskCount = Object.values(predictions).filter(p => p >= 0.3 && p < 0.6).length;
+  const lowRiskCount = Object.values(predictions).filter(p => p < 0.3).length;
+
+  const selected = selectedStation ? STATIONS.find(s => s.id === selectedStation) : null;
+  const selectedProb = selectedStation ? predictions[selectedStation] : null;
+
+  return (
+    <div id="root">
+      <div className="header">
+        <div className="header-left">
+          <div className="logo">Transit<span>Ripple</span></div>
+          <div className="tagline">CTA L Delay Propagation · Temporal GNN</div>
+        </div>
+        <div className="header-right">
+          <div className={`status-pill`}>
+            <div className={`status-dot ${status === 'loading' ? 'loading' : status === 'error' ? 'error' : ''}`} />
+            {status === 'loading' ? 'Fetching predictions…' : status === 'error' ? 'API unreachable' : 'Live predictions'}
+          </div>
+          <button className="refresh-btn" onClick={fetchPredictions}>↻ Refresh</button>
+        </div>
+      </div>
+
+      <div className="main">
+        <div className="sidebar">
+          <div className="sidebar-header">
+            {selected ? `${selected.name}` : `Stations (${STATIONS.length})`}
+          </div>
+
+          {selected && (
+            <div style={{padding:'12px 16px', borderBottom:'1px solid #1e2d4a'}}>
+              <div style={{fontSize:12,color:'#64748b',marginBottom:4}}>Station ID</div>
+              <div style={{fontSize:13,color:'#cbd5e1',marginBottom:8}}>{selected.id}</div>
+              <div style={{fontSize:12,color:'#64748b',marginBottom:4}}>Delay probability</div>
+              <div style={{fontSize:28,fontWeight:700,color: probColor(selectedProb)}}>
+                {selectedProb !== undefined && selectedProb !== null ? `${(selectedProb*100).toFixed(1)}%` : '—'}
+              </div>
+              <div style={{fontSize:11,color:'#475569',marginTop:4}}>
+                {selectedProb >= 0.6 ? '⚠ High risk of delay' : selectedProb >= 0.3 ? '~ Moderate risk' : '✓ Likely on time'}
+              </div>
+              <button onClick={() => setSelectedStation(null)} style={{marginTop:10,fontSize:11,color:'#475569',background:'none',border:'1px solid #1e2d4a',borderRadius:4,padding:'3px 8px',cursor:'pointer'}}>
+                ← All stations
+              </button>
+            </div>
+          )}
+
+          <div className="sidebar-content">
+            {sortedStations.map(station => {
+              const prob = predictions[station.id];
+              return (
+                <div
+                  key={station.id}
+                  className={`station-card ${selectedStation === station.id ? 'selected' : ''}`}
+                  onClick={() => {
+                    setSelectedStation(station.id);
+                    const m = markersRef.current[station.id];
+                    if (m && mapInstanceRef.current) {
+                      mapInstanceRef.current.setView(m.getLatLng(), 14);
+                    }
+                  }}
+                >
+                  <div>
+                    <div className="station-name">{station.name}</div>
+                    <div className="station-id">{station.id}</div>
+                  </div>
+                  {prob !== undefined ? (
+                    <div className={`prob-badge ${probClass(prob)}`}>{(prob*100).toFixed(0)}%</div>
+                  ) : (
+                    <div style={{fontSize:12,color:'#334155'}}>—</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="map-container">
+          <div id="map" ref={mapRef} />
+
+          <div className="map-overlay">
+            <div className="legend-title">Delay risk</div>
+            <div className="legend-item"><div className="legend-dot" style={{background:'#22c55e'}} />Low (&lt;30%)</div>
+            <div className="legend-item"><div className="legend-dot" style={{background:'#f59e0b'}} />Medium (30–60%)</div>
+            <div className="legend-item"><div className="legend-dot" style={{background:'#ef4444'}} />High (&gt;60%)</div>
+          </div>
+
+          {lastUpdated && (
+            <div className="last-updated">
+              Last updated {lastUpdated.toLocaleTimeString()} · auto-refresh every 2 min
+            </div>
+          )}
+
+          {error && (
+            <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',zIndex:999,background:'#1a0a0a',border:'1px solid #7f1d1d',borderRadius:10,padding:'16px 24px',textAlign:'center',color:'#fca5a5',fontSize:13}}>
+              <div style={{fontWeight:600,marginBottom:4}}>Could not reach API</div>
+              <div style={{color:'#94a3b8',fontSize:12}}>Make sure uvicorn is running on port 8000</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="stats-bar">
+        <div className="stat">
+          <span className="stat-label">Stations monitored</span>
+          <span className="stat-value">{STATIONS.length}</span>
+        </div>
+        <div className="stat">
+          <span className="stat-label">High risk</span>
+          <span className={`stat-value ${highRiskCount > 0 ? 'danger' : 'success'}`}>{highRiskCount}</span>
+        </div>
+        <div className="stat">
+          <span className="stat-label">Moderate risk</span>
+          <span className={`stat-value ${midRiskCount > 5 ? 'warning' : ''}`}>{midRiskCount}</span>
+        </div>
+        <div className="stat">
+          <span className="stat-label">On time</span>
+          <span className="stat-value success">{lowRiskCount}</span>
+        </div>
+        <div className="stat">
+          <span className="stat-label">Model</span>
+          <span className="stat-value" style={{fontSize:12,color:'#64748b'}}>GCNConv + GRU · AUC 0.91</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+<style>
+.station-tooltip { background: #0d1526 !important; border: 1px solid #1e3a4a !important; color: #e2e8f0 !important; font-size: 12px !important; box-shadow: none !important; }
+.leaflet-tooltip-top:before { border-top-color: #1e3a4a !important; }
+</style>
+</body>
+</html>
